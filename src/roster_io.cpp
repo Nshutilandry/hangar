@@ -51,7 +51,7 @@ bool load_roster(const std::string& path, std::vector<Mech>& roster, int& skippe
             bad_lines++;
             continue;
         }
-
+        
         if (name_str.empty()) {
             bad_lines++;
             continue;
