@@ -1,35 +1,104 @@
-#ifndef HANGAR_ROSTER_IO_H
-#define HANGAR_ROSTER_IO_H
+#include "roster_io.h"
+#include <fstream>
+#include <sstream>
+#include <iostream>
 
-#include <string>
-#include <vector>
+bool save_roster(const std::vector<Mech>& roster, const std::string& path) {
+    std::ofstream file(path);
+    if (!file.is_open()) {
+        return false;
+    }
 
-#include "mech.h"
+    for (const auto& mech : roster) {
+        // Format: name,hp,attack,armor
+        file << mech.get_name() << ","
+             << mech.get_hp() << ","
+             << mech.get_attack() << ","
+             << mech.get_armor() << "\n";
+    }
 
-/*
- * FILE FORMAT (data/roster.csv)
- * One mech per line:   name,hp,attack,armor
- *   Example:           Old Faithful,120,30,10
- *   - name may contain spaces but never a comma, and cannot be empty
- *   - hp must be at least 1; attack and armor must be 0 or greater
- *   - exactly 4 fields per line, all numbers must be whole numbers
- */
+    return true;
+}
 
-/// Writes every mech in roster to the file at path, one per line, replacing
-/// whatever was there before.
-/// @return true if the file was opened and written successfully, false otherwise.
-bool save_roster(const std::vector<Mech>& roster, const std::string& path);
+bool load_roster(const std::string& path, std::vector<Mech>& roster, int& skipped_lines) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        return false;
+    }
 
-/// Reads mechs from the file at path.
-/// - If the file cannot be opened: return false and leave roster unchanged.
-/// - Otherwise: roster is replaced with the valid mechs found, skipped_lines is
-///   set to the number of lines that were NOT valid records, and true is returned.
-/// A line is invalid if it breaks any rule in the file format above.
-bool load_roster(const std::string& path, std::vector<Mech>& roster, int& skipped_lines);
+    std::vector<Mech> temp_roster;
+    int bad_lines = 0;
+    std::string line;
 
-/// Adds text as one new line at the END of the file at path. Existing content
-/// must be kept. The file is created if it does not exist.
-/// @return true if the line was written, false otherwise.
-bool append_line(const std::string& path, const std::string& text);
+    while (std::getline(file, line)) {
+        // Skip empty lines or handle basic line reading
+        if (line.empty()) {
+            bad_lines++;
+            continue;
+        }
 
-#endif
+        std::stringstream ss(line);
+        std::string name_str, hp_str, attack_str, armor_str, extra_str;
+
+        // Exactly 4 fields separated by commas
+        if (!std::getline(ss, name_str, ',') ||
+            !std::getline(ss, hp_str, ',') ||
+            !std::getline(ss, attack_str, ',') ||
+            !std::getline(ss, armor_str, ',')) {
+            bad_lines++;
+            continue;
+        }
+
+        // Check if there are extra fields/trailing characters on the line
+        if (ss >> extra_str) {
+            bad_lines++;
+            continue;
+        }
+
+        // Name cannot be empty
+        if (name_str.empty()) {
+            bad_lines++;
+            continue;
+        }
+
+        // Parse and validate numeric fields using stringstreams (avoiding std::stoi)
+        int hp = 0, attack = -1, armor = -1;
+        std::stringstream hp_ss(hp_str);
+        std::stringstream att_ss(attack_str);
+        std::stringstream arm_ss(armor_str);
+        char extra_char;
+
+        // Ensure numbers are whole numbers with nothing after them
+        if (!(hp_ss >> hp) || (hp_ss >> extra_char) || hp < 1) {
+            bad_lines++;
+            continue;
+        }
+        if (!(att_ss >> attack) || (att_ss >> extra_char) || attack < 0) {
+            bad_lines++;
+            continue;
+        }
+        if (!(arm_ss >> armor) || (arm_ss >> extra_char) || armor < 0) {
+            bad_lines++;
+            continue;
+        }
+
+        // If all checks pass, construct the mech and add it to our temporary roster
+        temp_roster.emplace_back(name_str, hp, attack, armor);
+    }
+
+    // Replace roster and set skipped lines count
+    roster = std::move(temp_roster);
+    skipped_lines = bad_lines;
+    return true;
+}
+
+bool append_line(const std::string& path, const std::string& text) {
+    // Open in append mode so existing content is kept and file is created if missing
+    std::ofstream file(path, std::ios::app);
+    if (!file.is_open()) {
+        return false;
+    }
+
+    file << text << "\n";
+    return true;
+}

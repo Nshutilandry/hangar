@@ -17,8 +17,7 @@ const std::string roster_path = std::string(HANGAR_DATA_DIR) + "/roster.csv";
 const std::string battle_log_path = std::string(HANGAR_DATA_DIR) + "/battle_log.txt";
 const std::string graveyard_path = std::string(HANGAR_DATA_DIR) + "/graveyard.txt";
 
-/// Prompts until the user enters a whole number in [low, high].
-/// Returns false if input ends (Ctrl-D) before a valid number is entered.
+
 bool read_int(const std::string& prompt, int low, int high, int& result) {
     std::string line;
     while (true) {
@@ -65,6 +64,8 @@ int main() {
     roster.push_back(make_random_mech());
 
     // STRETCH: try to load roster_path here, before the menu starts.
+    int startup_skipped = 0;
+    load_roster(roster_path, roster, startup_skipped);
 
     while (true) {
         print_menu();
@@ -82,13 +83,19 @@ int main() {
             roster.back().print();
 
         } else if (choice == 3) {
-            // TODO (Checkpoint 1): call save_roster() with roster and roster_path.
-            // Print "Roster saved." on success, or a clear error message on failure.
+            if (save_roster(roster, roster_path)) {
+                std::cout << "Roster saved.\n";
+            } else {
+                std::cout << "Error: Could not save roster to " << roster_path << ".\n";
+            }
 
         } else if (choice == 4) {
-            // TODO (Checkpoints 2 and 3): call load_roster() with roster_path.
-            // On success, print how many mechs are in the roster and how many
-            // lines were skipped. On failure, print a clear error message.
+            int skipped_lines = 0;
+            if (load_roster(roster_path, roster, skipped_lines)) {
+                std::cout << "Loaded " << roster.size() << " mechs (" << skipped_lines << " lines skipped).\n";
+            } else {
+                std::cout << "Error: Could not open roster file " << roster_path << ".\n";
+            }
 
         } else if (choice == 5) {
             if (roster.empty()) {
@@ -105,18 +112,32 @@ int main() {
             std::cout << "Challenger: ";
             challenger.print();
 
+            std::string fighter_name = fighter.get_name();
+
             DuelResult result = simulate_duel(fighter, challenger);
             std::cout << result.summary << '\n';
 
-            // TODO (Checkpoint 4a): append a line to battle_log_path made of
-            // timestamp(), a space, and result.summary.
+            // Checkpoint 4a: append timestamp and result summary to battle log
+            append_line(battle_log_path, timestamp() + " " + result.summary);
 
-            // TODO (Checkpoint 4b): if the fighter was destroyed, append a line to
-            // graveyard_path saying who was destroyed and by whom, then remove the
-            // fighter from the roster. (Do not use fighter after removing it.)
+            // Checkpoint 4b: if the fighter was destroyed, record in graveyard and remove from roster
+            if (fighter.get_hp() <= 0) {
+                std::string death_record = fighter_name + " was destroyed by " + challenger.get_name();
+                append_line(graveyard_path, death_record);
+                roster.erase(roster.begin() + (index - 1));
+            }
 
         } else {
-            // TODO (Stretch): ask whether to save the roster before quitting.
+            // STRETCH: ask whether to save the roster before quitting.
+            char save_choice = 'n';
+            std::cout << "Save roster before quitting? (y/n): ";
+            if (std::cin >> save_choice && (save_choice == 'y' || save_choice == 'Y')) {
+                if (save_roster(roster, roster_path)) {
+                    std::cout << "Roster saved.\n";
+                } else {
+                    std::cout << "Error: Could not save roster.\n";
+                }
+            }
             break;
         }
     }
